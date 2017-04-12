@@ -1,0 +1,7 @@
+{
+  "name": "signaling-server-for-webrtc-native-clientb",
+  "version": "0.0.1",
+  "description": "Signaling server for webrtc native client",
+  "dependencies": {
+  }
+}
