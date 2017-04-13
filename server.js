@@ -116,3 +116,4 @@ net.createServer(function (socket) {
 }).listen(port);
 
 client.trackTrace("Signaling server running at port "+ port);
+console.log("Signaling server running at port "+ port);
