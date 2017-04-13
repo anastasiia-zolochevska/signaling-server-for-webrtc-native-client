@@ -9,8 +9,6 @@ var generalRoom = "GENERAL";
 
 var port = process.env.PORT || 8889;
 
-appInsights.setup().start();
-
 net.createServer(function (socket) {
 
     socket.on('data', function (data) {
