@@ -1,4 +1,6 @@
 net = require('net');
+appInsights = require("applicationinsights");
+var client = appInsights.getClient();
 
 var sockets = [];
 var clientCounter = 1;
@@ -7,12 +9,15 @@ var generalRoom = "GENERAL";
 
 var port = process.env.PORT || 8889;
 
+appInsights.setup().start();
+
 net.createServer(function (socket) {
 
     socket.on('data', function (data) {
         filterSockets();
 
         data = "" + data;
+        log(data);
 
         if (data.indexOf("sign_in") != -1) {
             socket.id = clientCounter++;
@@ -33,17 +38,18 @@ net.createServer(function (socket) {
             var toSocket = getSocketById(toId);
             var payload = data.substring(data.indexOf("text/plain\r\n\r\n") + 14, data.length);
             socket.id = fromId;
-            socket.room=fromId+toId;           
+            socket.room=fromId+"_"+toId;           
             toSocket.room=socket.room;
             forwardMessageToPeer(socket, toSocket, payload);
         }
 
         sockets.push(socket);
+        log("Total open sockets "+sockets.length);
 
     });
 
     socket.on('error', function (e) {
-        console.log(e);
+        log(e);
     });
 
     function filterSockets() {
@@ -73,7 +79,7 @@ net.createServer(function (socket) {
     }
 
     function formatListOfClients(currentSocket) {
-        console.log("format",currentSocket.id, currentSocket.room);
+        log("format", currentSocket.id, currentSocket.room);
         var result = clientNameToId[currentSocket.id] + "," + currentSocket.id + ",1\n";
         sockets.forEach(function (socket) {
             if (socket.id != currentSocket.id && clientNameToId[socket.id] && socket.room==currentSocket.room) {
@@ -104,8 +110,11 @@ net.createServer(function (socket) {
         return message;
     }
 
+    function log(message){
+       client.trackTrace(message); 
+    }
+
 
 }).listen(port);
 
-
-console.log("Signaling server running at port", port);
+client.trackTrace("Signaling server running at port "+ port);
