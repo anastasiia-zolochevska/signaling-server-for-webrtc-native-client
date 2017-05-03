@@ -4,7 +4,7 @@ var client = appInsights.getClient();
 
 var sockets = [];
 var clientCounter = 1;
-var clientNameToId = {};
+var socketToId = {};
 var generalRoom = "GENERAL";
 
 var port = process.env.PORT || 8889;
@@ -19,14 +19,21 @@ net.createServer(function (socket) {
 
         if (data.indexOf("sign_in") != -1) {
             socket.id = clientCounter++;
-            socket.room=generalRoom;
-            clientNameToId[socket.id] = data.substring(data.indexOf("?") + 1, data.indexOf("HTTP") - 1);
-            var data = formatListOfClients(socket, true);     
-            socket.write(formatMessage("200 Added", data, socket.id, true));
-            notifyOtherSockets(socket)
+            socket.room = generalRoom;
+            socketToId[socket.id] = { name: data.substring(data.indexOf("?") + 1, data.indexOf("HTTP") - 1) };
+            if (data.indexOf("renderingclient_") != -1) {
+                socketToId[socket.id].isRenderingClient = true;
+                socket.isRenderingClient = true;
+            }
+            if (data.indexOf("renderingserver_") != -1) {
+                socketToId[socket.id].isRenderingServer = true;
+                socket.isRenderingServer = true;
+            }
+            socket.write(formatMessage("200 Added", formatListOfClients(socket, true), socket.id, true));
+            notifyOtherSockets(socket);
         }
         else if (data.indexOf("wait") != -1) {
-            socket.room=generalRoom;
+            socket.room = generalRoom;
             socket.id = data.substring(data.indexOf("peer_id=") + 8, data.indexOf("HTTP") - 1);
         }
 
@@ -36,13 +43,13 @@ net.createServer(function (socket) {
             var toSocket = getSocketById(toId);
             var payload = data.substring(data.indexOf("text/plain\r\n\r\n") + 14, data.length);
             socket.id = fromId;
-            socket.room=fromId+"_"+toId;           
-            toSocket.room=socket.room;
+            socket.room = fromId + "_" + toId;
+            toSocket.room = socket.room;
             forwardMessageToPeer(socket, toSocket, payload);
         }
 
         sockets.push(socket);
-        log("Total open sockets "+sockets.length);
+        log("Total open sockets " + sockets.length);
 
     });
 
@@ -63,8 +70,12 @@ net.createServer(function (socket) {
 
     function notifyOtherSockets(currentSocket) {
         sockets.forEach(function (socket) {
-            if (socket.id === currentSocket.id || socket.room!=currentSocket.room) return;
-            var data = clientNameToId[currentSocket.id] + "," + currentSocket.id + ",1\n";
+            if (socket.id === currentSocket.id ||
+                socket.room != currentSocket.room ||
+                (currentSocket.isRenderingClient && socketToId[socket.id].isRenderingClient) ||
+                (currentSocket.isRenderingServer && socketToId[socket.id].isRenderingServer))
+                return;
+            var data = socketToId[currentSocket.id].name + "," + currentSocket.id + ",1\n";
             var message = formatMessage("200 OK", data, socket.id, true);
             socket.write(message);
         });
@@ -77,22 +88,27 @@ net.createServer(function (socket) {
     }
 
     function formatListOfClients(currentSocket) {
-        log("format", currentSocket.id, currentSocket.room);
-        var result = clientNameToId[currentSocket.id] + "," + currentSocket.id + ",1\n";
+
+        var result = socketToId[currentSocket.id].name + "," + currentSocket.id + ",1\n";
         sockets.forEach(function (socket) {
-            if (socket.id != currentSocket.id && clientNameToId[socket.id] && socket.room==currentSocket.room) {
-                result += clientNameToId[socket.id] + "," + socket.id + ",1\n"
+            if (socket.id != currentSocket.id &&
+                socketToId[socket.id] &&
+                socket.room == currentSocket.room &&
+                !(currentSocket.isRenderingClient && socketToId[socket.id].isRenderingClient) &&
+                !(currentSocket.isRenderingServer && socketToId[socket.id].isRenderingServer)) {
+                result += socketToId[socket.id].name + "," + socket.id + ",1\n"
             }
         });
+        console.log(result);
 
         return result;
     }
 
-    function formatMessage(status, data, pragma, shouldCLoseConnection) {
+    function formatMessage(status, data, pragma, shouldCloseConnection) {
         var message = "HTTP/1.1 " + status + " \r\n" +
             "Server: PeerConnectionTestServer/0.1\r\n" +
             "Cache-Control: no-cache\r\n" +
-            (shouldCLoseConnection ? "Connection: close\r\n" : "") +
+            (shouldCloseConnection ? "Connection: close\r\n" : "") +
             "Content-Type: text/plain\r\n" +
             "Content-Length: " + data.length + "\r\n" +
             "Pragma: " + pragma + "\r\n" +
@@ -108,12 +124,13 @@ net.createServer(function (socket) {
         return message;
     }
 
-    function log(message){
-       client.trackTrace(message); 
+    function log(message) {
+        console.log(message);
+        client.trackTrace(message);
     }
 
 
 }).listen(port);
 
-client.trackTrace("Signaling server running at port "+ port);
-console.log("Signaling server running at port "+ port);
+client.trackTrace("Signaling server running at port " + port);
+console.log("Signaling server running at port " + port);
