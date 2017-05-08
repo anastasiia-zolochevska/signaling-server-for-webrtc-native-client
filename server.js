@@ -54,7 +54,7 @@ net.createServer(function (socket) {
     });
 
     socket.on('error', function (e) {
-        log(e);
+        log("Error", e);
     });
 
     function filterSockets() {
